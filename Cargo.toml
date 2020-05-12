@@ -1,0 +1,9 @@
+[package]
+name = "gba-convert-images"
+version = "0.1.0"
+authors = ["Tom Streller <tom.streller@tutti.ch>"]
+edition = "2018"
+
+[dependencies]
+serde = "1.0"
+toml = "0.5"
