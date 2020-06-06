@@ -1,16 +1,17 @@
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     out_dir: String,
     work_dir: String,
-    images: Vec<ImageConfig>,
+    images: HashMap<String, ImageConfig>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            images: vec![],
+            images: HashMap::new(),
             out_dir: "./src/assets".to_string(),
             work_dir: "./assets".to_string(),
         }
@@ -20,19 +21,21 @@ impl Default for Config {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ImageConfig {
+    #[serde(rename = "full")]
     FullImage(FullImageConfig),
+    #[serde(rename = "tiled")]
     TiledImage(TiledImageConfig),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BaseConfig {
-    file_name: String,
+    file_name: Option<String>,
     const_name: Option<String>,
     palette_name: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-enum FullImageTargetDepth {
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum FullImageTargetDepth {
     #[serde(rename = "16bit")]
     U16,
     #[serde(rename = "8bit")]
@@ -47,8 +50,8 @@ pub struct FullImageConfig {
     depth: FullImageTargetDepth,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-enum TiledImageTargetDepth {
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TiledImageTargetDepth {
     #[serde(rename = "8bit")]
     U8,
     #[serde(rename = "4bit")]
@@ -61,4 +64,45 @@ pub struct TiledImageConfig {
     cfg: BaseConfig,
 
     depth: TiledImageTargetDepth,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    const TEST_CONFIG: &str = r#"
+out_dir = "./src/images"
+work_dir = "./assets"
+
+[images.image1]
+type = "tiled"
+depth = "8bit"
+
+[images.image2]
+type = "full"
+depth = "16bit"
+    "#;
+
+    #[test]
+    fn parsing() {
+        let decoded: Config = toml::from_str(TEST_CONFIG).unwrap();
+
+        assert_eq!(decoded.out_dir, "./src/images");
+        assert_eq!(decoded.work_dir, "./assets");
+        assert_eq!(decoded.images.len(), 2);
+
+        match &decoded.images["image1"] {
+            ImageConfig::TiledImage(cfg) => {
+                assert_eq!(cfg.depth, TiledImageTargetDepth::U8);
+            },
+            _ => panic!(),
+        };
+
+        match &decoded.images["image2"] {
+            ImageConfig::FullImage(cfg) => {
+                assert_eq!(cfg.depth, FullImageTargetDepth::U16);
+            },
+            _ => panic!(),
+        };
+    }
 }
