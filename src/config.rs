@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,14 +94,14 @@ depth = "16bit"
         match &decoded.images["image1"] {
             ImageConfig::TiledImage(cfg) => {
                 assert_eq!(cfg.depth, TiledImageTargetDepth::U8);
-            },
+            }
             _ => panic!(),
         };
 
         match &decoded.images["image2"] {
             ImageConfig::FullImage(cfg) => {
                 assert_eq!(cfg.depth, FullImageTargetDepth::U16);
-            },
+            }
             _ => panic!(),
         };
     }
