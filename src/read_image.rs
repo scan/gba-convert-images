@@ -1,6 +1,6 @@
+use image::{open, Rgba};
 use std::path::Path;
 use std::vec::Vec;
-use image::{open, Rgba};
 
 #[derive(Debug, Clone, Default)]
 pub struct ImageInfo {
@@ -26,7 +26,7 @@ fn convert_colour(colour: &Rgba<u8>) -> u16 {
     return from_rgb(
         (colour[0] >> 3) as u16,
         (colour[1] >> 2) as u16,
-        (colour[2] >> 3) as u16
+        (colour[2] >> 3) as u16,
     );
 }
 
@@ -54,7 +54,7 @@ where
         image_data.push((index & 0x0f) as u8);
     }
 
-    return ImageInfo{
+    return ImageInfo {
         width: rgba_img.width(),
         height: rgba_img.height(),
         colours: colour_list,
