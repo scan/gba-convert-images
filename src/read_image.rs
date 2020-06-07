@@ -19,13 +19,13 @@ impl ImageInfo {
 
 #[inline(always)]
 const fn from_rgb(r: u16, g: u16, b: u16) -> u16 {
-    (b & 0x1f) << 10 | (g & 0x1f) << 5 | (r & 0x1f)
+    (b & 0x1f) << 10 | (g & 0x3f) << 5 | (r & 0x1f)
 }
 
 fn convert_colour(colour: &Rgba<u8>) -> u16 {
     return from_rgb(
         (colour[0] >> 3) as u16,
-        (colour[1] >> 2) as u16,
+        (colour[1] >> 3) as u16,
         (colour[2] >> 3) as u16,
     );
 }
@@ -51,7 +51,7 @@ where
                 colour_list.len() - 1
             });
 
-        image_data.push((index & 0x0f) as u8);
+        image_data.push((index & 0xff) as u8);
     }
 
     return ImageInfo {

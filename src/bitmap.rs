@@ -1,10 +1,16 @@
-use quote::{quote, format_ident};
+use compress::rle;
 use proc_macro::TokenStream;
-use std::path::{Path, PathBuf};
-use syn::parse::{Parse, ParseStream, Result};
-use syn::{Ident, LitInt, LitStr, Token};
+use quote::{format_ident, quote};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+};
+use syn::{
+    parse::{Parse, ParseStream, Result},
+    Ident, LitBool, LitInt, LitStr, Token,
+};
 
-use crate::{read_image::{ImageInfo}};
+use crate::read_image::ImageInfo;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum BitDepth {
@@ -23,6 +29,7 @@ pub struct MacroInput {
     name: String,
     pub path: PathBuf,
     depth: BitDepth,
+    rle: bool,
 }
 
 impl Parse for MacroInput {
@@ -30,6 +37,7 @@ impl Parse for MacroInput {
         let mut img_name: Option<String> = None;
         let mut path: Option<String> = None;
         let mut depth: Option<BitDepth> = None;
+        let mut rle_enabled: Option<bool> = None;
 
         while !input.is_empty() {
             let name: Ident = input.parse()?;
@@ -54,7 +62,7 @@ impl Parse for MacroInput {
                 }
                 "depth" => {
                     if depth.is_some() {
-                        panic!("Only one `depth` can be defined")
+                        panic!("Only one `depth` can be defined");
                     }
 
                     let depth_lit: LitInt = input.parse()?;
@@ -68,6 +76,15 @@ impl Parse for MacroInput {
                             d
                         )),
                     };
+                }
+                "rle" => {
+                    if rle_enabled.is_some() {
+                        panic!("Only one `rle` can be defined");
+                    }
+
+                    let rle_lit: LitBool = input.parse()?;
+
+                    rle_enabled = Some(rle_lit.value);
                 }
                 name => panic!(format!("Unknown field name: {}", name)),
             }
@@ -86,11 +103,13 @@ impl Parse for MacroInput {
             None => panic!("name is required!"),
         };
         let depth = depth.unwrap_or(BitDepth::U16);
+        let rle = rle_enabled.unwrap_or(false);
 
         Ok(MacroInput {
             name: name,
             path: path,
             depth: depth,
+            rle: rle,
         })
     }
 }
@@ -111,23 +130,39 @@ impl MacroInput {
 
         let info_colours = &info.colours;
         let info_colours_length = info.colours.len();
-        let info_data = &info.data;
-        let info_data_length = info.data.len();
 
         let palette_name = format_ident!("{}_PALETTE", uppercase_name);
         let data_name = format_ident!("{}_BYTES", uppercase_name);
 
         let ast = match self.depth {
             BitDepth::U8 => {
+                let mut info_data = info.data;
+
+                if self.rle {
+                    let mut encoder = rle::Encoder::new(Vec::new());
+                    encoder.write_all(&info_data[..]).unwrap();
+                    info_data = encoder.finish().0;
+                }
+
+                let info_data_length = info_data.len();
+
                 quote! {
                     #dimension_ast
 
                     pub const #palette_name: [u16; #info_colours_length] = [#(#info_colours),*];
                     pub const #data_name: [u8; #info_data_length] = [#(#info_data),*];
                 }
-            },
+            }
             BitDepth::U16 => {
-                let converted: Vec<u16> = info_data.into_iter().map(|b| info.colours[*b as usize]).collect();
+                if self.rle {
+                    panic!("RLE is not currently supported for 16 bit bitmaps")
+                }
+
+                let converted: Vec<u16> = (&info.data)
+                    .into_iter()
+                    .map(|b| info.colours[*b as usize])
+                    .collect();
+
                 let converted_length = converted.len();
 
                 quote! {
@@ -135,7 +170,7 @@ impl MacroInput {
 
                     pub const #data_name: [u16; #converted_length] = [#(#converted),*];
                 }
-            },
+            }
         };
 
         ast.into()
