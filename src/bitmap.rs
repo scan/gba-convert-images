@@ -1,4 +1,4 @@
-use quote::quote;
+use quote::{quote, format_ident};
 use proc_macro::TokenStream;
 use std::path::{Path, PathBuf};
 use syn::parse::{Parse, ParseStream, Result};
@@ -99,29 +99,44 @@ impl MacroInput {
     pub fn tokens(&self, info: ImageInfo) -> TokenStream {
         let uppercase_name = self.name.to_uppercase();
 
-        let width_name = format!("{}_WIDTH", uppercase_name);
-        let height_name = format!("{}_HEIGHT", uppercase_name);
-        let info_width = info.width;
-        let info_height = info.height;
+        let width_name = format_ident!("{}_WIDTH", uppercase_name);
+        let height_name = format_ident!("{}_HEIGHT", uppercase_name);
+        let info_width = info.width as usize;
+        let info_height = info.height as usize;
+
+        let dimension_ast = quote! {
+            pub const #width_name: usize = #info_width;
+            pub const #height_name: usize = #info_height;
+        };
 
         let info_colours = &info.colours;
         let info_colours_length = info.colours.len();
         let info_data = &info.data;
         let info_data_length = info.data.len();
 
-        let palette_name = format!("{}_PALETTE", uppercase_name);
-        let data_name = format!("{}_BYTES", uppercase_name);
+        let palette_name = format_ident!("{}_PALETTE", uppercase_name);
+        let data_name = format_ident!("{}_BYTES", uppercase_name);
 
-        let ast = quote! {
-            pub const #width_name: usize = #info_width;
-            pub const #height_name: usize = #info_height;
+        let ast = match self.depth {
+            BitDepth::U8 => {
+                quote! {
+                    #dimension_ast
 
-            pub const #palette_name: [u16; #info_colours_length] = [#(#info_colours),*];
-            pub const #data_name: [u8; #info_data_length] = [#(#info_data),*];
+                    pub const #palette_name: [u16; #info_colours_length] = [#(#info_colours),*];
+                    pub const #data_name: [u8; #info_data_length] = [#(#info_data),*];
+                }
+            },
+            BitDepth::U16 => {
+                let converted: Vec<u16> = info_data.into_iter().map(|b| info.colours[*b as usize]).collect();
+                let converted_length = converted.len();
+
+                quote! {
+                    #dimension_ast
+
+                    pub const #data_name: [u16; #converted_length] = [#(#converted),*];
+                }
+            },
         };
-
-
-        println!("{}", ast.to_string());
 
         ast.into()
     }
