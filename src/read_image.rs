@@ -10,6 +10,13 @@ pub struct ImageInfo {
     pub data: Vec<u8>,
 }
 
+impl ImageInfo {
+    pub fn get(&self, x: usize, y: usize) -> u8 {
+        let pos = y * (self.width as usize) + x;
+        self.data[pos]
+    }
+}
+
 #[inline(always)]
 const fn from_rgb(r: u16, g: u16, b: u16) -> u16 {
     (b & 0x1f) << 10 | (g & 0x1f) << 5 | (r & 0x1f)

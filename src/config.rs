@@ -3,9 +3,9 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    out_dir: String,
-    work_dir: String,
-    images: HashMap<String, ImageConfig>,
+    pub out_dir: String,
+    pub work_dir: String,
+    pub images: HashMap<String, ImageConfig>,
 }
 
 impl Default for Config {
