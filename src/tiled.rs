@@ -1,4 +1,3 @@
-use compress::rle;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use std::{
@@ -14,13 +13,13 @@ use crate::read_image::ImageInfo;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum BitDepth {
+    U4,
     U8,
-    U16,
 }
 
 impl Default for BitDepth {
     fn default() -> Self {
-        return Self::U16;
+        return Self::U8;
     }
 }
 
@@ -29,7 +28,6 @@ pub struct MacroInput {
     name: String,
     pub path: PathBuf,
     depth: BitDepth,
-    rle: bool,
 }
 
 impl Parse for MacroInput {
@@ -37,7 +35,6 @@ impl Parse for MacroInput {
         let mut img_name: Option<String> = None;
         let mut path: Option<String> = None;
         let mut depth: Option<BitDepth> = None;
-        let mut rle_enabled: Option<bool> = None;
 
         while !input.is_empty() {
             let name: Ident = input.parse()?;
@@ -69,22 +66,13 @@ impl Parse for MacroInput {
                     let depth_val = depth_lit.value();
 
                     depth = match depth_val {
+                        4 => Some(BitDepth::U4),
                         8 => Some(BitDepth::U8),
-                        16 => Some(BitDepth::U16),
                         d => panic!(format!(
-                            "Depth of {} is invalid, only 8 or 16 is supported for bitmaps",
+                            "Depth of {} is invalid, only 4 or 8 is supported for tilesets",
                             d
                         )),
                     };
-                }
-                "rle" => {
-                    if rle_enabled.is_some() {
-                        panic!("Only one `rle` can be defined");
-                    }
-
-                    let rle_lit: LitBool = input.parse()?;
-
-                    rle_enabled = Some(rle_lit.value);
                 }
                 name => panic!(format!("Unknown field name: {}", name)),
             }
@@ -102,77 +90,65 @@ impl Parse for MacroInput {
             Some(n) => n,
             None => panic!("name is required!"),
         };
-        let depth = depth.unwrap_or(BitDepth::U16);
-        let rle = rle_enabled.unwrap_or(false);
+        let depth = depth.unwrap_or(BitDepth::default());
 
         Ok(MacroInput {
             name: name,
             path: path,
             depth: depth,
-            rle: rle,
         })
     }
 }
 
 impl MacroInput {
     pub fn tokens(&self, info: ImageInfo) -> TokenStream {
+        if info.width % 8 != 0 {
+            panic!(format!(
+                "image width of {} is not evenly divisible by 8",
+                info.width
+            ));
+        }
+
+        if info.height % 8 != 0 {
+            panic!(format!(
+                "image width of {} is not evenly divisible by 8",
+                info.height
+            ));
+        }
+
+        let cols = (info.width / 8) as usize;
+        let rows = (info.height / 8) as usize;
+        let num_tiles = cols * rows;
+
+        let mut tiles: Vec<Vec<u8>> = vec![];
+
+        for row in 0..rows {
+            for col in 0..cols {
+                let mut tile: Vec<u8> = vec![];
+
+                for y in 0..8 {
+                    for x in 0..8 {
+                        tile.push(info.get(col + x, row + y));
+                    }
+                }
+
+                tiles.push(tile);
+            }
+        }
+
         let uppercase_name = self.name.to_uppercase();
 
-        let width_name = format_ident!("{}_WIDTH", uppercase_name);
-        let height_name = format_ident!("{}_HEIGHT", uppercase_name);
-        let info_width = info.width as usize;
-        let info_height = info.height as usize;
-
-        let dimension_ast = quote! {
-            pub const #width_name: usize = #info_width;
-            pub const #height_name: usize = #info_height;
-        };
-
-        let info_colours = &info.colours;
-        let info_colours_length = info.colours.len();
+        let tiles_name = format_ident!("{}_TILES_COUNT", uppercase_name);
 
         let palette_name = format_ident!("{}_PALETTE", uppercase_name);
-        let data_name = format_ident!("{}_BYTES", uppercase_name);
+        let info_colours = info.colours;
+        let info_colours_length = info_colours.len();
 
-        let ast = match self.depth {
-            BitDepth::U8 => {
-                let mut info_data = info.data;
-
-                if self.rle {
-                    let mut encoder = rle::Encoder::new(Vec::new());
-                    encoder.write_all(&info_data[..]).unwrap();
-                    info_data = encoder.finish().0;
-                }
-
-                let info_data_length = info_data.len();
-
-                quote! {
-                    #dimension_ast
-
-                    pub const #palette_name: [u16; #info_colours_length] = [#(#info_colours),*];
-                    pub const #data_name: [u8; #info_data_length] = [#(#info_data),*];
-                }
-            }
-            BitDepth::U16 => {
-                if self.rle {
-                    panic!("RLE is not currently supported for 16 bit bitmaps")
-                }
-
-                let converted: Vec<u16> = (&info.data)
-                    .into_iter()
-                    .map(|b| info.colours[*b as usize])
-                    .collect();
-
-                let converted_length = converted.len();
-
-                quote! {
-                    #dimension_ast
-
-                    pub const #data_name: [u16; #converted_length] = [#(#converted),*];
-                }
-            }
+        let dimension_ast = quote! {
+            pub const #tiles_name: usize = #num_tiles;
+            pub const #palette_name: [u16, #info_colours_length] = [#(#info_colours),*];
         };
 
-        ast.into()
+        return dimension_ast.into();
     }
 }
