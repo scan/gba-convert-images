@@ -8,7 +8,6 @@ edition = "2018"
 image = "0.23"
 quote = "1.0"
 syn = "0.15"
-compress = "0.1"
 
 [lib]
 proc-macro = true

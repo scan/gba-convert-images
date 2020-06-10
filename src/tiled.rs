@@ -1,15 +1,15 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use std::{
-    io::Write,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 use syn::{
     parse::{Parse, ParseStream, Result},
-    Ident, LitBool, LitInt, LitStr, Token,
+    Ident, LitInt, LitStr, Token,
 };
 
-use crate::read_image::ImageInfo;
+use crate::{
+    read_image::ImageInfo,
+    util::{consolidate_u16_u32, consolidate_u4_u32, consolidate_u8_u32},
+};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum BitDepth {
@@ -136,19 +136,40 @@ impl MacroInput {
             }
         }
 
+        let tiles: Vec<u8> = tiles.into_iter().flatten().collect();
+
         let uppercase_name = self.name.to_uppercase();
 
-        let tiles_name = format_ident!("{}_TILES_COUNT", uppercase_name);
+        let tiles_count_name = format_ident!("{}_TILES_COUNT", uppercase_name);
 
         let palette_name = format_ident!("{}_PALETTE", uppercase_name);
-        let info_colours = info.colours;
+        let info_colours = consolidate_u16_u32(info.colours);
         let info_colours_length = info_colours.len();
 
         let dimension_ast = quote! {
-            pub const #tiles_name: usize = #num_tiles;
-            pub const #palette_name: [u16, #info_colours_length] = [#(#info_colours),*];
+            pub const #tiles_count_name: usize = #num_tiles;
+            pub const #palette_name: [u32, #info_colours_length] = [#(#info_colours),*];
         };
 
-        return dimension_ast.into();
+        let tiles = match self.depth {
+            BitDepth::U8 => consolidate_u8_u32(tiles),
+            BitDepth::U4 => {
+                if info_colours.len() > 16 {
+                    panic!("Too many colours in palette for 16 bit tilemap!");
+                }
+                consolidate_u4_u32(tiles)
+            }
+        };
+
+        let tiles_length = tiles.len();
+        let tiles_name = format_ident!("{}_TILES", uppercase_name);
+
+        let ast = quote! {
+            #dimension_ast
+
+            pub const #tiles_name: [u32; #tiles_length] = [#(#tiles),*];
+        };
+
+        return ast.into();
     }
 }
