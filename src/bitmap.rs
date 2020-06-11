@@ -149,8 +149,6 @@ impl MacroInput {
             }
         };
 
-        println!("{}", ast.to_string());
-
         ast.into()
     }
 }
