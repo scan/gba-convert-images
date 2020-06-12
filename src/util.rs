@@ -8,6 +8,7 @@ pub fn consolidate_u8_u32(input: Vec<u8>) -> Vec<u32> {
         .collect()
 }
 
+#[allow(dead_code)]
 pub fn consolidate_u8_u16(input: Vec<u8>) -> Vec<u16> {
     input
         .chunks(2)
