@@ -148,7 +148,7 @@ impl MacroInput {
 
         let dimension_ast = quote! {
             pub const #tiles_count_name: usize = #num_tiles;
-            pub const #palette_name: [u32, #info_colours_length] = [#(#info_colours),*];
+            pub const #palette_name: [u32; #info_colours_length] = [#(#info_colours),*];
         };
 
         let tiles = match self.depth {
